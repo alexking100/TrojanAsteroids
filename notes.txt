@@ -1,0 +1,22 @@
+long term solution to ODE for trojan and greek asteroids
+
+stability of orbit about lagrange point for sun and jupiter
+stability dependence on mass of planet - mars, earth
+
+
+
+additional plots or ideas
+
+- field plot showing 5 lagrange points
+- transfer orbit
+- density of trojan/greek asteroids in real life and model of how they rotate
+- earth and moon lagrange points
+- unstable orbits, james webb telescope
+- lissajous curves for other Lagrange Points
+
+TO DO LIST
+- abstract code
+- why do orbits not overlap ?
+
+
+
