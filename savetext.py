@@ -7,6 +7,15 @@ Created on Wed Mar 23 21:13:05 2022
 """
 import numpy as np
 
-myarray = np.array([[0,1,2,3],[4,5,6,7]])
+arr = np.array([
+	[0,0],
+	[1,1],
+	[2,2],
+	[3,3],
+	[4,4]
+	])
+norms = np.linalg.norm(arr, axis = 1)
+print(arr)
+print(norms)
 
-np.savetxt('test.txt', myarray)
+print(np.amax(norms))

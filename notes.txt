@@ -7,7 +7,7 @@ stability dependence on mass of planet - mars, earth
 
 additional plots or ideas
 
-- field plot showing 5 lagrange points
+DONE - field plot showing 5 lagrange points 
 - transfer orbit
 - density of trojan/greek asteroids in real life and model of how they rotate
 - earth and moon lagrange points
@@ -15,8 +15,15 @@ additional plots or ideas
 - lissajous curves for other Lagrange Points
 
 TO DO LIST
-- abstract code
-- why do orbits not overlap ?
+- abstract code - renew all the functions which I have left behind to make sure they still run smoothly.
+- how do I get the measured time period into a function used to set up the ODE (for starting velocity of the asteroid at the lagrange point)?
+Can I get this velocity theoretically without using time period? 
 
+
+NOTES FOR REPORT
+
+- ode over ivp
+- abstracting code because confusing number of variables in a single array (Point, ODE class)
+- rotating frames of reference
 
 
