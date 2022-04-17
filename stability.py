@@ -1,70 +1,51 @@
 '''
 This script will test the stability of orbits with a 
-random initial displacement from L4 and a random velocity
+random initial displacement from L4 and a random velocity (deviated from equilibrium velocity)
 
 '''
+from trojan import *
+# import matplotlib.pyplot as plt
+# import numpy as np
+# import math
+# from trojan import deltas, rand_deltas, asteroids
+# from plots import perform_rotation_ode
+# from two_body_system import Two_Body_System, Point, ODE
 
-import matplotlib.pyplot as plt
-import numpy as np
-import math
-# from trojan import Two_Body_System
-# from trojan import measure_period
-# from trojan import t_span
-# from trojan import N
-from trojan import deltas, rand_deltas, asteroids
-from plots import perform_rotation_ode
+rand_vels = np.loadtxt('data/rand_vels.txt')
+rand_deltas = np.loadtxt('data/rand_deltas.txt')
+deltas = get_deltas(asteroids)
+delta_vs = get_delta_vs(asteroids)
+dxs = get_ds(asteroids)
+dys = get_ds(asteroids)
+dv_xs = get_ds(asteroids)
+dv_ys = get_ds(asteroids)
 
-
-class Point:
-	def __init__(self, r):
-		self.x = r[0]
-		self.y = r[1]
-
-class ODE:
-	def __init__(self, ys):
-		self.ode = ys
-
-		self.r_j = Point([ys[:, 0], ys[:, 2]])
-		self.v_j = Point([ys[:, 1], ys[:, 3]])
-
-		self.r_s = Point([ys[:, 4], ys[:, 6]])
-		self.v_s = Point([ys[:, 5], ys[:, 7]])
-
-		self.r_a = Point([ys[:, 8], ys[:, 10]])
-		self.v_a = Point([ys[:, 9], ys[:, 11]])
-
-
-unperturbed = np.loadtxt('unperturbed.txt')
-unpert_ode = ODE(unperturbed)
+unpert_ode = ODE(np.loadtxt('data/unperturbed.txt'))
 
 solved_rand_deltas = []
 for i, rand_delta in enumerate(rand_deltas):
-	solved_rand_delta = ODE(np.loadtxt(f'rand_delta_{i}.txt'))
-	solved_rand_deltas.append(solved_rand_delta)
+	for j, rand_vel in enumerate(rand_vels):
+		solved_rand_delta = ODE(np.loadtxt(f'data/rand_delta_{i}_{j}.txt'))
+		solved_rand_deltas.append(solved_rand_delta)
 
-def maximum_deviation():
+solved_deltas = []
+for i, delta in enumerate(deltas):
+	for j, delta_v in enumerate(delta_vs):
+		solved_delta = ODE(np.loadtxt(f'data/delta_{i}_{j}.txt'))
+		solved_deltas.append(solved_delta)
 
-	max_mod_delta_rs = []
+solved_grids = []
+for i, dx in enumerate(dxs):
+	for j, dy in enumerate(dys):
+		solved_grid = ODE(np.loadtxt(f'data/grid_{i}_{j}.txt'))
+		solved_grids.append(solved_grid)
 
-	for r in solved_rand_deltas:
-		r_primed = perform_rotation_ode(r)
-		r_primed_unpert = perform_rotation_ode(unpert_ode)
-		delta_r = r_primed - r_primed_unpert
-		# print(delta_r)
-		mod_delta_r = np.linalg.norm(delta_r, axis = 0)
-		# print(mod_delta_r)
-		# print(f"shape is {np.shape(mod_delta_r)}")
-		max_mod_delta_r = np.amax(mod_delta_r)
-		max_mod_delta_rs.append(max_mod_delta_r)
+solved_vs = []
+for i, dv_x in enumerate(dv_xs):
+	for j, dv_y in enumerate(dv_ys):
+		solved_v = ODE(np.loadtxt(f'data/v_{i}_{j}.txt'))
+		solved_vs.append(solved_v)
 
-	mod_deltas = np.linalg.norm(rand_deltas, axis = 1)
-	# print(max_mod_delta_rs)
-	# print(mod_deltas)
-
-	plt.plot(mod_deltas, max_mod_delta_rs, marker = 'o')
-	plt.title("Max deviation vs initial displacement from L4")
-	plt.show()
-	# return (mod_deltas, max_mod_delta_rs)
 
 
 # def maximum_deviation():
@@ -88,11 +69,17 @@ def maximum_deviation():
 # 	# return(max_devs)
 
 
-maximum_deviation()
+
+# maximum_deviation(solved_deltas, deltas)
+# heatmap(solved_deltas, unpert_ode, "Change in velocity in x direction /arb units", "Displacement from L4 in y direction / arb units")
+heatmap(solved_grids, unpert_ode, "dx /arb units", "dy / arb units")
+heatmap(solved_vs, unpert_ode, "dv_x /arb units", "dv_y / arb units")
+
 
 # plt.plot(mod_deltas, max_mod_delta_rs)
 # plt.title("Max deviation vs initial displacement from L4")
-# plt.show()
+
+plt.show()
 
 
 
