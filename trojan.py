@@ -12,16 +12,27 @@ Setting up parameters
 
 G = 4*math.pi**2 # value of Gravitational Constant in our units
 N = 1000 # number of evaluated points on the orbit
-t_span = [0,50] # time span of orbit
+t_span = [0,300] # time span of orbit
 t = np.linspace(t_span[0], t_span[1], N) 
-asteroids = 1 # number of asteroids in the orbit
-m_j = 0.01 # in units of solar mass
+asteroids = 500 # number of asteroids in the orbit
+m_j = 0.001 # in units of solar mass
 m_s = 1 # in units of solar mass
 R = 5.2 # distance from Jupiter to Sun, in AU 
-max_delta = 1
-min_delta = 0.1
-max_delta_v = 0.1
+# max_delta = 1 # for grids and heat maps
+max_delta = 0.5 # horseshoe orbit
+min_delta = 0.005 # horseshoe orbit (single_deltas used, not grid)
+max_delta_v = 0.2
 min_delta_v = 0
+
+def time_period(R, m_j, m_s):
+    '''
+    returns time period of an asteroid in equilibrium position 
+    (same T as Jupiter around Sun)
+    '''
+    T = ( (4 * math.pi**2 * R**3 )/ (G * (m_s + m_j)) ) ** (1/2)
+    return T
+
+T = time_period(R, m_j, m_s)
 
 '''
 Define spatial deviation from lagrange point for each asteroid (formulaic and random)
@@ -31,9 +42,8 @@ Define spatial deviation from lagrange point for each asteroid (formulaic and ra
 # direction changes in the y direction
 # velocity changes (for each y) in the x direction
 
-def get_ds(asteroids):
-    return np.linspace(-max_delta, max_delta, asteroids)
-
+def get_ds(bottom, top, asteroids):
+    return np.linspace(bottom, top, asteroids)
 
 def get_deltas(asteroids):
     delta_xs = np.zeros(asteroids)
@@ -69,57 +79,8 @@ def get_rand_vels(asteroids):
     return rand_vels
 
 
-# def circ_orbit_conditions(y_j, m_j, m_s, delta):
 
-#     '''
-#     fix velocity of J and S such that they make circular orbits
-#     y_j fixes the initial positions of the Sun and Jupiter, as well as their initial velocities
-#     origin is calculated to be the CoM of the system
-#     delta are vectors which separate the asteroids from their equilibrium position (Trojan/Greek)
-
-#     WE ARE WORKING IN THE COM FRAME IN XY PLANE ONLY
-    
-#     returns in the form required to enter into ode solver below
-#     '''
-
-#     y_s = - y_j * (m_j/m_s) # fixed such that CoM lies at origin
-
-#     r_j = [0, y_j] # initially, x is zero for both Sun and Jupiter
-#     r_s = [0, y_s]
-
-#     x_a = (3**(1/2) / 2) * (abs(y_s) + abs(y_j))
-#     y_a =  (1/2) * (abs(y_j) - abs(y_s))
-    
-#     r_eqm = np.array([x_a, y_a])
-
-
-#     r_a = r_eqm + delta
-
-
-#     # get initial velocities of Jupiter, Sun, Asteroid at Lagrange Point
-
-#     R = abs(r_j[1]) + abs(r_s[1]) # Distance between Sun and Jupiter
-
-#     vx_s = - (G*m_s/R)**(1/2) * m_j/(m_j + m_s)
-#     vy_s = 0
-
-#     vx_j = (G*m_s/R)**(1/2) * m_s/(m_j + m_s) 
-#     vy_j = 0
-
-#     vx_a = (m_s - m_j )/ (2*(m_s + m_j)) * (G*m_s/R)**(1/2)
-#     vy_a = -(3*G*m_s / (4*R))**(1/2)
-
-#     v_s = [vx_s, vy_s]
-#     v_j = [vx_j, vy_j]
-#     v_a = [vx_a, vy_a]
-
-
-#     conditions = format_conditions(r_j, v_j, r_s, v_s, r_a, v_a)
-
-#     return conditions
-
-
-def circ_orbit_conditions_new(R, m_j, m_s, delta, rand_vel, eqm = False):
+def circ_orbit_conditions_new(R, m_j, m_s, delta, vel, rand_vel, v_eqm = True, dv = False):
     '''
     returns initial conditions for all objects (J, S, Asteroid)
     to be in circular orbit about the CoM (which lies at the origin)
@@ -152,24 +113,21 @@ def circ_orbit_conditions_new(R, m_j, m_s, delta, rand_vel, eqm = False):
     r_a_eqm = np.array([X * np.sin(th), X * np.cos(th)])
     r_a = r_a_eqm + delta
 
-    if eqm:
+    # the following statements were constructed to allow the initial conditions to be called with varying values for velocity of asteroid
+    # the default value (near equilibrium) is used when v_eqm == True and dv == False
+    if v_eqm and not dv:
         v_a = np.array([v * np.cos(th) , - v * np.sin(th)])
-    else:
+    elif v_eqm and dv: 
         v_a = np.array([v * np.cos(th) , - v * np.sin(th)]) + np.array(rand_vel)
+    elif v_eqm == False:
+        v_a = np.array(vel)
+    else:
+        print("logic not right!")
 
     conditions = format_conditions(r_j, v_j, r_s, v_s, r_a, v_a)
 
     return conditions
 
-
-def time_period(R, m_j, m_s):
-    '''
-    returns time period of an asteroid in equilibrium position 
-    (same T as Jupiter around Sun)
-    '''
-    T = ( (4 * math.pi**2 * R**3 )/ (G * (m_s + m_j)) ) ** (1/2)
-    # print(T)
-    return T
 
 
 def format_conditions(r_j, v_j, r_s, v_s, r_a, v_a):
@@ -189,7 +147,7 @@ def format_conditions(r_j, v_j, r_s, v_s, r_a, v_a):
 
 class Point:
     '''
-    Abstract Class
+    Abstracting Class
     '''
     def __init__(self, r):
         self.x = r[0]
@@ -197,8 +155,8 @@ class Point:
 
 class ODE:
     '''
-    Abstract Class
-    input is solution to ode solver
+    Abstracting Class
+    Input is solution to ode solver
     '''
     def __init__(self, ode):
         self.ode = ode
@@ -214,8 +172,8 @@ class ODE:
 
 class Conditions:
     '''
-    Abstract Class
-    input is array in form returned by format_conditions()
+    Abstracting Class
+    Input is array in form returned by format_conditions()
     '''
     def __init__(self, conditions):
         self.conditions = conditions
@@ -253,15 +211,13 @@ class Two_Body_System:
         return conditions
     
         
-    def interact_ivp(self, t_span, t, method, delta, rand_vel, eqm = False):
+    def interact_ivp(self, t_span, t, method, delta, rand_vel, v_eqm = True, dv = False):
         '''
-        m, r are the mass (scalar) and position (array) of the object respectively
-        Make the usual equation of motion into coupled first order ODEs
+        ODE solver with various methods, taken as an input
+        Called in run_orbit.py and performances are tested in test_integrator.py
         '''
 
-        y_0 = circ_orbit_conditions_new(R, self.m_j, self.m_s, delta, rand_vel, eqm = eqm)
-        # y_0 = self.general_orbit_conditions([0,1], [0,0], [0,-0.1], [0,0], [0,0], [0,0])        
-        
+        y_0 = circ_orbit_conditions_new(R, self.m_j, self.m_s, delta, [0,0], rand_vel, v_eqm = v_eqm, dv = dv)
         
         sol = scipy.integrate.solve_ivp(
             self.ODE, 
@@ -274,13 +230,13 @@ class Two_Body_System:
         return sol
 
 
-    def interact_ode(self, t_span, delta, rand_vel, eqm = False):
+    def interact_ode(self, t_span, delta, vel, v_eqm, dv):
         '''
-        Using a different solver
+        ODE solver using method scipy.integrate.odeint
+        This is the main solver used in the bulk of the project.
         '''
         
-        # y_0 = circ_orbit_conditions(1, self.m_j, self.m_s, delta)
-        y_0 = circ_orbit_conditions_new(R, self.m_j, self.m_s, delta, rand_vel, eqm = eqm)
+        y_0 = circ_orbit_conditions_new(R, self.m_j, self.m_s, delta, vel, [0,0], v_eqm, dv)
         
         sol = scipy.integrate.odeint(
             self.ODE, 
@@ -294,17 +250,17 @@ class Two_Body_System:
     
     def ODE(self, t, y):
         
-#       y = [x_j, vx_j, y_j, vy_j, x_s, vx_s, y_s, vy_s, x_a, vx_a, y_a, vy_a]
+        # transform y into a class where its data is readable
+        conditions = Conditions(y)
 
-        # assign meaning to y-values
-        r_j = np.array([y[0], y[2]])
-        v_j = np.array([y[1], y[3]])
+        r_j = np.array([conditions.r_j.x, conditions.r_j.y])
+        v_j = np.array([conditions.v_j.x, conditions.v_j.y])
 
-        r_s = np.array([y[4], y[6]])
-        v_s = np.array([y[5], y[7]])
+        r_s = np.array([conditions.r_s.x, conditions.r_s.y])
+        v_s = np.array([conditions.v_s.x, conditions.v_s.y])
 
-        r_a = np.array([y[8], y[10]])
-        v_a = np.array([y[9], y[11]])
+        r_a = np.array([conditions.r_a.x, conditions.r_a.y])
+        v_a = np.array([conditions.v_a.x, conditions.v_a.y])
         
         # convention is dx_js is the x vector from Jupiter to the Sun, etc.
         dx_js = r_s[0] - r_j[0]
@@ -338,22 +294,20 @@ class Two_Body_System:
 
     def field(self, x, y):
 
-        # return x+y
-        conditions = circ_orbit_conditions_new(R, self.m_j, self.m_s, [0,0], [0,0], eqm = True)
-        T = time_period(R, m_j, m_s)
+        conditions = circ_orbit_conditions_new(R, self.m_j, self.m_s, [0,0], [0,0], [0,0], v_eqm = True, dv = False)
         omega = 2 * math.pi / T
-        ode = Conditions(conditions)
+        conds = Conditions(conditions)
 
-        r_j_array = np.array([ode.r_j.x, ode.r_j.y])
-        r_s_array = np.array([ode.r_s.x, ode.r_s.y])
+        r_j_array = np.array([conds.r_j.x, conds.r_j.y])
+        r_s_array = np.array([conds.r_s.x, conds.r_s.y])
 
         r = (x**2 + y**2)**(1/2)
-        delta_x_j = (x - ode.r_j.x)
-        delta_y_j = (y - ode.r_j.y)
+        delta_x_j = (x - conds.r_j.x)
+        delta_y_j = (y - conds.r_j.y)
         delta_r_j = (delta_x_j**2 + delta_y_j**2)**(1/2)
 
-        delta_x_s = (x - ode.r_s.x)
-        delta_y_s = (y - ode.r_s.y)
+        delta_x_s = (x - conds.r_s.x)
+        delta_y_s = (y - conds.r_s.y)
         delta_r_s = (delta_x_s**2 + delta_y_s**2)**(1/2)
 
         U_j = - G * self.m_j / delta_r_j
@@ -362,19 +316,17 @@ class Two_Body_System:
 
         U_eff = np.array(U_rot) + np.array(U_j) + np.array(U_s)
 
-        # U_eff = self.cutoff(U_eff, -50)
-
         return U_eff
 
 
-    def planar_plot(self, x_min, x_max, y_min, y_max, solved_deltas, unpert_ode):
+    def planar_plot(self, x_min, x_max, y_min, y_max, sols, unpert_ode):
 
         '''
-        somehow pass parameters into this to go into the field function, such as R (defined in both functions...), and ode
+        Plot contour map of effective potential in 2D space
         '''
-        # conditions = circ_orbit_conditions(1, self.m_j, self.m_s, [0,0])
-        conditions = circ_orbit_conditions_new(R, self.m_j, self.m_s, [0,0], [0,0], eqm = True)
-        ode = Conditions(conditions)
+
+        conditions = circ_orbit_conditions_new(R, self.m_j, self.m_s, [0,0], [0,0], [0,0], v_eqm = True, dv = False)
+        conds = Conditions(conditions)
 
         x = np.linspace(x_min, x_max, 256)
         y = np.linspace(y_min, y_max, 256)
@@ -383,26 +335,32 @@ class Two_Body_System:
 
         fig, ax = plt.subplots()
 
-        levels = np.arange(-30, 0, 0.5); # plot min U_eff, max U_eff, step in U_eff
-        ax.contour(X, Y, U_eff, levels); #plt? 
+        levels = np.arange(-30, 0, 0.2); # plot min U_eff, max U_eff, step in U_eff
+        ax.contour(X, Y, U_eff, levels); 
         ax.set_aspect('equal', adjustable='box');
         
-        # for i, solved_delta in enumerate(solved_deltas):
-        #     r_primed_delta = perform_rotation_ode(unpert_ode, solved_delta)
+
+        # Use the following if the displaced asteroids are to be plotted
+
+        # for i, sol in enumerate(sols):
+        #     r_primed_delta = perform_rotation_ode(unpert_ode, sol)
         #     initial_x = r_primed_delta[0][0]
         #     initial_y = r_primed_delta[1][0]
         #     if i == 0:
-        #         ax.plot(initial_x, initial_y, marker = 'o', color = 'r', label = "Displaced Asteroid")
+        #         ax.plot(initial_x, initial_y, marker = 'o', color = 'r', ms = 3, label = "Displaced Asteroid")
         #     else:
-        #         ax.plot(initial_x, initial_y, marker = 'o', color = 'r')
+        #         ax.plot(initial_x, initial_y, marker = 'o', color = 'r', ms = 3)
 
-        
-        ax.plot(ode.r_a.x, ode.r_a.y , marker="x", color='k'); 
-        ax.plot(-ode.r_a.x, ode.r_a.y , marker="x", color='k', label = "L4/L5"); 
-        ax.plot(ode.r_j.x, ode.r_j.y , marker="o", markersize=10, color='b', label = 'Jupiter'); 
-        ax.plot(ode.r_s.x, ode.r_s.y , marker="o", markersize=15, color='y', label = 'Sun'); 
+        # plots Jupiter, Sun and L4/L5
+        ax.plot(conds.r_a.x, conds.r_a.y , marker="x", color='k'); 
+        ax.plot(-conds.r_a.x, conds.r_a.y , marker="x", color='k', label = "L4/L5"); 
+        ax.plot(conds.r_j.x, conds.r_j.y , marker="o", markersize=10, color='b', label = 'Jupiter'); 
+        ax.plot(conds.r_s.x, conds.r_s.y , marker="o", markersize=15, color='y', label = 'Sun'); 
         ax.set_xlabel("x /AU");
         ax.set_ylabel("y /AU");
+        ax.set_aspect('equal');
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
         ax.legend(loc='lower right');
         ax.set_title("Effective Potential for Co-Rotating Frame"); 
 
@@ -421,7 +379,10 @@ def measure_period(ode):
     return period
 
 
-def make_plots_ode(unpert_ode, solved_deltas):
+def make_plots_ode(unpert_ode, odes):
+    '''
+    Plots motion of Jupiter, Sun and Asteroids in the non-rotating frame.
+    '''
 
     fig, ax = plt.subplots()
     ax.plot(unpert_ode.r_j.x, unpert_ode.r_j.y, label = "Jupiter")
@@ -429,36 +390,43 @@ def make_plots_ode(unpert_ode, solved_deltas):
     ax.plot(unpert_ode.r_a.x, unpert_ode.r_a.y, label = "Unperturbed Asteroid")
     ax.set_xlim(-8,8)
     ax.set_ylim(-8,8)
-    ax.plot(solved_deltas[0].r_a.x, solved_deltas[0].r_a.y, label = "Perturbed Asteroid")
+    ax.set_aspect('equal')
+    ax.plot(odes[1].r_a.x, odes[1].r_a.y, label = "Perturbed Asteroid", alpha = 0.7)
     ax.legend()
-    ax.set_title("Motion of Sun, Jupiter and Asteroids in non-rotating frame")
+    ax.set_title("Motion of Sun, Jupiter and Asteroids")
 
 
-def stationary_initial_position(unpert_ode, solved_deltas):
+def stationary_initial_position(unpert_ode, odes, xlabel, ylabel, title):
+    '''
+    Plots initial positions of each object in the system
+    '''
 
     r_primed_unpert = perform_rotation_ode(unpert_ode, unpert_ode)
     unpert_x = r_primed_unpert[0][0]
     unpert_y = r_primed_unpert[1][0]
 
     fig, ax = plt.subplots()
-    for i, solved_delta in enumerate(solved_deltas):
-        r_primed_delta = perform_rotation_ode(unpert_ode, solved_delta)
+    for i, ode in enumerate(odes):
+        r_primed_delta = perform_rotation_ode(unpert_ode, ode)
         initial_x = r_primed_delta[0][0]
         initial_y = r_primed_delta[1][0]
-        ax.plot(initial_x, initial_y, marker = 'o', color = 'r', label = "Displaced Asteroid")
+        ax.plot(initial_x, initial_y, marker = 'o', ms = 3, color = 'r')
 
     ax.plot(unpert_x, unpert_y, marker = 'o', color = 'b', label = "Asteroid at L4")
     ax.plot(unpert_ode.r_j.x[0], unpert_ode.r_j.y[0], marker = 'x', label = "Jupiter")
     ax.plot(unpert_ode.r_s.x[0], unpert_ode.r_s.y[0], marker = 'x', label = "Sun")
     ax.set_xlim(-4, 4)
     ax.set_ylim(-2, 6)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.legend()
-    ax.set_title("Initial Positions of Bodies")
+    ax.set_title(title)
 
 
 def angle(unpert_ode, t):
-
-    T = measure_period(unpert_ode)
+    '''
+    Obtains angle called in perform_rotation_ode function
+    '''
 
     omega = 2*math.pi / T
     thetas = np.zeros(len(t))
@@ -495,97 +463,80 @@ def perform_rotation_ode(unpert_ode, ode):
     return r_primed
 
 
-def corotated_deviation(unpert_ode, solved_deltas, deltas, rand_vels, title):
-
-    print(len(solved_deltas))
+def corotated_deviation(unpert_ode, odes, title):
+    '''
+    Plots the motion of 'perturbed' asteroids about L4 in the rotating frame
+    '''
 
     r_primed_unpert = perform_rotation_ode(unpert_ode, unpert_ode)
 
     fig, ax = plt.subplots()
     # ax.plot(r_primed_unpert[0], r_primed_unpert[1], label = "Undisplaced Asteroid")
-    ax.plot(unpert_ode.r_j.x[0], unpert_ode.r_j.y[0], marker = 'o', ms = 10)
-    ax.plot(unpert_ode.r_s.x[0], unpert_ode.r_s.y[0], marker = 'o', ms = 15, color = 'y')
-    ax.plot(unpert_ode.r_a.x[0], unpert_ode.r_a.y[0], marker = 'x', ms = 15, color = 'k')
-    # asteroid_orbit = plt.Circle((0, 0), (unpert_ode.r_a.x**2 + unpert_ode.r_a.y**2)**0.5, color='k', fill=False)
-    # ax.add_patch(asteroid_orbit) this doesn't work...
+    ax.plot(unpert_ode.r_j.x[0], unpert_ode.r_j.y[0], marker = 'o', ms = 10, label = "Jupiter")
+    ax.plot(unpert_ode.r_s.x[0], unpert_ode.r_s.y[0], marker = 'o', ms = 15, color = 'y', label = "Sun")
+    ax.plot(unpert_ode.r_a.x[0], unpert_ode.r_a.y[0], marker = 'x', ms = 15, color = 'k', label = "L4")
 
-    for i, solved_delta in enumerate(solved_deltas):
-        r_primed_delta = perform_rotation_ode(unpert_ode, solved_delta)
+    for i, ode in enumerate(odes):
+        r_primed_delta = perform_rotation_ode(unpert_ode, ode)
         # diff_xs[i] = r_primed_delta[0] - r_primed_unpert[0]
         # diff_ys[i] = r_primed_delta[1] - r_primed_unpert[1]
-        ax.plot(r_primed_delta[0], r_primed_delta[1], label = "Displaced Asteroid") #, label = f"delta_r = {float(round(np.linalg.norm(deltas[i]), 3))}" , delta_v = {float(round(np.linalg.norm(rand_vels[i]), 3))}")
+        ax.plot(r_primed_delta[0], r_primed_delta[1], alpha = 1) #, label = f"delta_r = {float(round(np.linalg.norm(deltas[i]), 3))}" , delta_v = {float(round(np.linalg.norm(rand_vels[i]), 3))}")
     ax.set_xlim(-6,6)
-    ax.set_ylim(-3,8)
+    ax.set_ylim(-5,7)
+    ax.set_xlabel('x /AU')
+    ax.set_ylabel('y /AU')
+    ax.set_aspect('equal');
     ax.legend()
     ax.set_title(title)
 
 
-    # diff_ast_x = r_primed_unpert[0] - unpert_ode.r_a.x[0]
-    # diff_ast_y = r_primed_unpert[1] - unpert_ode.r_a.y[0]
-    # print(unpert_ode.r_a.x[0], unpert_ode.r_a.y[0])
-
-    # plt.plot(unpert_ode.r_a.x, unpert_ode.r_a.y, label = "Asteroid in rest frame")
-    # plt.plot(r_primed_unpert[0], r_primed_unpert[1], label = "Asteroid in rotated frame")
-    # plt.legend()
-
-    # fig, ax = plt.subplots()
-    # plt.plot(diff_x, diff_y, label = 'Deviation of asteroid') # difference between the asteroid's position and the initial lagrange point
-
 def energy(ode, m_j, m_s):
+    '''
+    Gets total energy of masses Jupiter and the Sun to compare between ODE solvers in test_integrator.py
+    '''
 
     v_j = (ode.v_j.x**2 + ode.v_j.y**2)**0.5
     v_s = (ode.v_s.x**2 + ode.v_s.y**2)**0.5
-
     r_js = ((ode.r_s.x - ode.r_j.x)**2 + (ode.r_s.y - ode.r_j.y)**2)**0.5
-
-    print(f"vel jupiter = {v_j}")
-    print(f"vel sun = {v_s}")
-    print(f"sun to jupiter = {r_js}")
-
     T_j = (1/2) * m_j * v_j**2
     U_j = - (G * m_s * m_j) / r_js
-
     T_s = (1/2) * m_s * v_s**2
     U_s = - (G * m_s * m_j) / r_js
 
     E = T_j + U_j + T_s + U_s
-    print(E)
-
     return E
 
 
-def maximum_deviation(solved_rand_deltas, rand_deltas, unpert_ode):
+def maximum_deviation(odes, initial_dxs, unpert_ode, direction, cap = False):
+    '''
+    Finds maximum deviation in the rotating frame between 'perturbed' asteroid and L4 within its lifetime (set by t_span)
+    This function is used when there is one axis of initial displacement, not a whole grid.
+    '''
 
     max_mod_delta_rs = []
 
-    for r in solved_rand_deltas:
-        r_primed = perform_rotation_ode(unpert_ode, r)
+    for ode in odes:
+        r_primed = perform_rotation_ode(unpert_ode, ode)
         r_primed_unpert = perform_rotation_ode(unpert_ode, unpert_ode)
         delta_r = r_primed - r_primed_unpert
-        # print(delta_r)
         mod_delta_r = np.linalg.norm(delta_r, axis = 0)
-        # print(mod_delta_r)
-        # print(f"shape is {np.shape(mod_delta_r)}")
         max_mod_delta_r = np.amax(mod_delta_r)
         max_mod_delta_rs.append(max_mod_delta_r)
-    mod_deltas = np.linalg.norm(rand_deltas, axis = 1)
-    mod_deltas = np.repeat(mod_deltas, asteroids) 
-    '''
-    np.repeat function turns the array from (0,1,2,3) into (0,0,0,1,1,1,2,2,2,3,3,3) where each element
-    in the array is repeated (asteroids) times.  This is necessary because there are 10 velocities for each mod_delta value.
-    '''
-
-    # print(max_mod_delta_rs)
-    # print(mod_deltas)
+    # mod_deltas = np.repeat(mod_deltas, asteroids) 
 
     fig, ax = plt.subplots()
-    plt.plot(mod_deltas, max_mod_delta_rs, marker = 'o')
-    plt.title("Max deviation vs initial displacement from L4")
-    # ax.set_ylim(0, 10)
-    # return (mod_deltas, max_mod_delta_rs)
-
+    ax.plot(initial_dxs, max_mod_delta_rs, marker = 'x', color = 'r', ms = 5)
+    if cap:
+        ax.set_ylim(0,10)
+        ax.set_xlim(-0.2, 0.2)
+    ax.set_ylabel('maximum deviation from L4 over asteroid lifetime')
+    ax.set_xlabel(f"{direction} displacement from L4")
+    ax.set_title(f"Max deviation vs initial displacement in {direction} direction from L4")
 
 def heatmap(sols, unpert_ode, xlabel, ylabel):
+    '''
+    plots a heatmap of maximum deviation from L4 of asteroid as a function of x and y displacement/velocities 
+    '''
 
     max_mod_delta_rs = []
     arr = np.zeros(asteroids**2)
@@ -601,12 +552,15 @@ def heatmap(sols, unpert_ode, xlabel, ylabel):
         arr[i] = max_mod_delta_r
         i += 1
 
-    X = np.reshape(arr, (asteroids, asteroids))
+    X = np.reshape(arr, (asteroids, asteroids), order='C')
+    # values = np.linspace(-max_delta, max_delta, asteroids)
 
     fig, ax = plt.subplots()
-    ax.imshow(X, vmin = 0, vmax = 5)
+    ax.imshow(X, vmin = 0, vmax = 7, origin = 'lower')
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    # ax.set_xticks(values)
+    # ax.set_yticks(values)
     ax.set_title("Maximum Deviation from L4")
 
 
